@@ -1,0 +1,6 @@
+vendor/
+*.cache
+node_modules/
+build/
+*.env
+tests/Output/*.pdf
