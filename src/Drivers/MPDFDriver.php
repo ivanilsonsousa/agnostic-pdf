@@ -6,6 +6,7 @@ use AgnosticPDF\Contracts\PDFClonerDriverInterface;
 use AgnosticPDF\Contracts\PDFServiceInterface;
 use Illuminate\Support\Facades\Response;
 use Illuminate\Support\Facades\View;
+use Mpdf\HTMLParserMode;
 use Mpdf\Mpdf;
 
 class MPDFDriver implements PDFServiceInterface, PDFClonerDriverInterface
@@ -92,5 +93,26 @@ class MPDFDriver implements PDFServiceInterface, PDFClonerDriverInterface
   public function getMpdf(): Mpdf
   {
     return $this->mpdf;
+  }
+
+  public function writeCss(string $css): self
+  {
+    $this->mpdf->WriteHTML($css, HTMLParserMode::HEADER_CSS);
+
+    return $this;
+  }
+
+  public function writeCssFile(string $path): self
+  {
+    $css = file_get_contents($path);
+
+    return $this->writeCss($css);
+  }
+
+  public function writeHtml(string $html): self
+  {
+    $this->mpdf->WriteHTML($html, HTMLParserMode::HTML_BODY);
+
+    return $this;
   }
 }
