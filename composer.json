@@ -1,6 +1,7 @@
 {
   "name": "ivanilsonsousa/agnostic-pdf",
   "description": "Manipulação de arquivos PDF agnóstica de drivers para aplicações Laravel",
+  "license": "MIT",
   "autoload": {
     "psr-4": {
       "AgnosticPDF\\": "src/"
