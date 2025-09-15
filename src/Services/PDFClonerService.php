@@ -15,10 +15,12 @@ class PDFClonerService
 
   public function cloneFromFile(string $file, ?callable $callback = null, bool $force = true): self
   {
+    $forceCompress = $force && config('pdf.force_compress_on_clone', false);
+    
     try {
       return $this->tryClone($file, $callback);
     } catch (\Throwable $e) {
-      if (!$force) {
+      if (!$forceCompress) {
         throw $e;
       }
 

@@ -11,6 +11,8 @@ return [
     */
   'driver' => env('PDF_DRIVER', 'mpdf'),
 
+  'force_compress_on_clone' => env('PDF_FORCE_COMPRESS_ON_CLONE', false),
+
   /*
     |--------------------------------------------------------------------------
     | MPDF Configuration
