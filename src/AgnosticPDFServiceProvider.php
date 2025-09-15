@@ -6,13 +6,14 @@ namespace AgnosticPDF;
 
 use AgnosticPDF\Contracts\PDFClonerDriverInterface;
 use AgnosticPDF\Contracts\PDFServiceInterface;
-use AgnosticPDF\Drivers\DompdfDriver;
-use AgnosticPDF\Drivers\MPDFDriver;
+use Illuminate\Contracts\Container\Container;
+use AgnosticPDF\Services\PDFManagerService;
 use AgnosticPDF\Services\PDFClonerService;
 use AgnosticPDF\Services\PDFCompressor;
-use AgnosticPDF\Services\PDFManagerService;
-use AgnosticPDF\Services\PDFService;
 use Illuminate\Support\ServiceProvider;
+use AgnosticPDF\Drivers\DompdfDriver;
+use AgnosticPDF\Services\PDFService;
+use AgnosticPDF\Drivers\MPDFDriver;
 
 final class AgnosticPDFServiceProvider extends ServiceProvider
 {
@@ -21,33 +22,34 @@ final class AgnosticPDFServiceProvider extends ServiceProvider
     // config/pdf.php
     $this->mergeConfigFrom(__DIR__ . '/../config/pdf.php', 'pdf');
 
-    // PDFServiceInterface -> driver atual (mpdf|dompdf)
-    $this->app->bind(PDFServiceInterface::class, function () {
-      return $this->createPdfDriver();
+    // Resolve o serviço "fino" já com o driver escolhido
+    $this->app->bind(PDFServiceInterface::class, function (): PDFServiceInterface {
+      $driver = config('pdf.driver', 'mpdf');
+
+      return match ($driver) {
+        'dompdf' => new PDFService(new DompdfDriver(config('pdf.dompdf', []))),
+        default  => new PDFService(new MPDFDriver(config('pdf.mpdf', []))),
+      };
     });
 
-    // Serviço fino que delega p/ driver
-    $this->app->bind(PDFService::class, function ($app) {
-      return new PDFService($app->make(PDFServiceInterface::class));
-    });
+    // Alias opcional para permitir type-hint em PDFService
+    $this->app->alias(PDFServiceInterface::class, PDFService::class);
 
-    // Cloner: só MPDF suporta. Se pedir cloner em dompdf, lança erro no momento da resolução.
+    // Cloner: sempre MPDF (único que suporta)
     $this->app->bind(PDFClonerDriverInterface::class, function () {
-      return $this->createClonerDriver();
+      return new MPDFDriver(config('pdf.mpdf', []));
     });
 
-    $this->app->bind(PDFClonerService::class, function ($app) {
+    $this->app->bind(PDFClonerService::class, function (Container $app) {
       return new PDFClonerService($app->make(PDFClonerDriverInterface::class));
     });
 
-    $this->app->singleton(PDFCompressor::class);
+    // Stateless -> singleton
+    $this->app->singleton(PDFCompressor::class, fn() => new PDFCompressor());
 
-    $this->app->singleton(PDFManagerService::class, function ($app) {
-      return new PDFManagerService(
-        $app->make(PDFService::class),
-        $app->make(PDFClonerService::class),
-        $app->make(PDFCompressor::class),
-      );
+    // Manager: singleton e SEM reter instâncias de PDF; resolve sob demanda
+    $this->app->singleton(PDFManagerService::class, function (Container $app) {
+      return new PDFManagerService($app);
     });
   }
 
@@ -56,32 +58,5 @@ final class AgnosticPDFServiceProvider extends ServiceProvider
     $this->publishes([
       __DIR__ . '/../config/pdf.php' => config_path('pdf.php'),
     ], 'pdf-config');
-  }
-
-  // ---------- Factories ----------
-
-  /** Driver de renderização atual (mpdf|dompdf) */
-  private function createPdfDriver(): PDFServiceInterface
-  {
-    $driver = config('pdf.driver', 'mpdf');
-
-    return match ($driver) {
-      'mpdf'   => new MPDFDriver(config('pdf.mpdf', [])),
-      'dompdf' => new DompdfDriver(config('pdf.dompdf', [])),
-      default  => new MPDFDriver(config('pdf.mpdf', [])),
-    };
-  }
-
-  /** Driver de clonagem (somente MPDF suporta) */
-  private function createClonerDriver(): PDFClonerDriverInterface
-  {
-    $driver = config('pdf.driver', 'mpdf');
-
-    return match ($driver) {
-      'mpdf'  => new MPDFDriver(config('pdf.mpdf', [])),
-      default => throw new \RuntimeException(
-        sprintf('Clonagem de PDF não é suportada pelo driver atual (%s).', $driver)
-      ),
-    };
   }
 }

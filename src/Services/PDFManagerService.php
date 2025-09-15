@@ -1,37 +1,46 @@
 <?php
 
+declare(strict_types=1);
+
 namespace AgnosticPDF\Services;
 
 use AgnosticPDF\Contracts\PDFServiceInterface;
+use Illuminate\Contracts\Container\Container;
+use AgnosticPDF\Drivers\DompdfDriver;
+use AgnosticPDF\Drivers\MPDFDriver;
 
 class PDFManagerService
 {
-  protected ?PDFBuilderService $builderInstance = null;
-
-  public function __construct(
-        protected PDFServiceInterface $pdfService,
-        protected PDFClonerService $pdfClonerService,
-        protected PDFCompressor $pdfCompressor,
-    ) {
-  }
+  public function __construct(private Container $container) {}
 
   public function pdf(): PDFServiceInterface
   {
-    return $this->pdfService;
+    // sempre resolve conforme config atual
+    return $this->container->make(PDFServiceInterface::class);
   }
 
   public function cloner(): PDFClonerService
   {
-    return $this->pdfClonerService;
+    return $this->container->make(PDFClonerService::class);
   }
 
   public function compressor(): PDFCompressor
   {
-    return $this->pdfCompressor;
+    return $this->container->make(PDFCompressor::class);
   }
 
   public function builder(): PDFBuilderService
   {
-    return new PDFBuilderService($this->pdfService, $this->pdfClonerService);
+    $driverType = config('pdf.driver', 'mpdf');
+
+    $driver = match ($driverType) {
+      'dompdf' => new DompdfDriver(config('pdf.dompdf', [])),
+      default  => new MPDFDriver(config('pdf.mpdf', [])),
+    };
+
+    $pdfService       = new PDFService($driver);
+    $pdfClonerService = new PDFClonerService($driver);
+
+    return new PDFBuilderService($pdfService, $pdfClonerService);
   }
 }
