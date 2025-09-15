@@ -76,7 +76,7 @@ class MPDFDriver implements PDFServiceInterface, PDFClonerDriverInterface
   {
     $tplId       = $this->mpdf->importPage($pageNo);
     $size        = $this->mpdf->getTemplateSize($tplId);
-    $orientation = $size['width'] < $size['height'] ? 'P' : 'L';
+    $orientation = $size['width'] > $size['height'] ? 'P' : 'L';
     $newformat   = [max($size['width'], $size['height']), min($size['width'], $size['height'])];
 
     $this->mpdf->AddPageByArray([
