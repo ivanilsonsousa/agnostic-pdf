@@ -56,4 +56,14 @@ class PDFService implements PDFServiceInterface
   {
     return $this->driver;
   }
+  
+  public function getEngine()
+  {
+    return $this->driver->getEngine();
+  }
+
+  public function tap(callable $fn): void
+  {
+    $this->driver->tap($fn);
+  }
 }

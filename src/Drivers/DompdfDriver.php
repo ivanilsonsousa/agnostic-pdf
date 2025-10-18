@@ -3,9 +3,9 @@
 namespace AgnosticPDF\Drivers;
 
 use AgnosticPDF\Contracts\PDFServiceInterface;
-use Dompdf\Dompdf;
 use Illuminate\Support\Facades\Response;
 use Illuminate\Support\Facades\View;
+use Dompdf\Dompdf;
 
 class DompdfDriver implements PDFServiceInterface
 {
@@ -69,5 +69,15 @@ class DompdfDriver implements PDFServiceInterface
       'Pragma'              => 'no-cache',
       'Expires'             => '0',
     ]);
+  }
+
+  public function getEngine()
+  {
+    return $this->dompdf;
+  }
+
+  public function tap(callable $fn): void
+  {
+    $fn($this->getEngine());
   }
 }

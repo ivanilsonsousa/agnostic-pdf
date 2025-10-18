@@ -86,15 +86,6 @@ class MPDFDriver implements PDFServiceInterface, PDFClonerDriverInterface
     $this->mpdf->useTemplate($tplId);
   }
 
-  /**
-   * Getter para acessar a instância do MPDF diretamente
-   * Permite configurações avançadas quando necessário
-   */
-  public function getMpdf(): Mpdf
-  {
-    return $this->mpdf;
-  }
-
   public function writeCss(string $css): self
   {
     $this->mpdf->WriteHTML($css, HTMLParserMode::HEADER_CSS);
@@ -114,5 +105,15 @@ class MPDFDriver implements PDFServiceInterface, PDFClonerDriverInterface
     $this->mpdf->WriteHTML($html, HTMLParserMode::HTML_BODY);
 
     return $this;
+  }
+
+  public function getEngine()
+  {
+    return $this->mpdf;
+  }
+
+  public function tap(callable $fn): void
+  {
+    $fn($this->getEngine());
   }
 }

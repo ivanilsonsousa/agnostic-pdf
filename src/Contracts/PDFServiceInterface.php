@@ -17,4 +17,14 @@ interface PDFServiceInterface
   public function stream(string $filename): void;
 
   public function streamResponse(string $filename): \Illuminate\Http\Response;
+
+  public function getEngine();
+
+  /**
+   * Executa um callback recebendo o driver concreto por parâmetro.
+   * Mantém o desacoplamento do Builder e permite operações avançadas.
+   *
+   * Ex.: $pdfService->tap(function(\Mpdf\Mpdf $mpdf) { ... });
+   */
+  public function tap(callable $fn): void;
 }
