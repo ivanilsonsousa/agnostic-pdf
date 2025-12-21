@@ -133,4 +133,11 @@ class MPDFDriver implements PDFServiceInterface, PDFClonerDriverInterface
   {
     $fn($this->getEngine());
   }
+
+  public function addPage(array $config = []): self
+  {
+    $this->mpdf->AddPage(...$config);
+
+    return $this;
+  }
 }

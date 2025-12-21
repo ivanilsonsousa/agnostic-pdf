@@ -27,4 +27,6 @@ interface PDFServiceInterface
    * Ex.: $pdfService->tap(function(\Mpdf\Mpdf $mpdf) { ... });
    */
   public function tap(callable $fn): void;
+
+  public function addPage(array $config = []): self;
 }

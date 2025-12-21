@@ -34,6 +34,15 @@ class PDFBuilderService
 
     return $this;
   }
+  
+  public function addPage(array $config = []): self
+  {
+    $this->steps[] = function () use ($config) {
+      $this->pdfService->addPage($config);
+    };
+
+    return $this;
+  }
 
   public function eachPage(string $pathFile, callable $pageCallback, bool $force = true): self
   {

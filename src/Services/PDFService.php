@@ -26,6 +26,13 @@ class PDFService implements PDFServiceInterface
 
     return $this;
   }
+  
+  public function addPage(array $config = []): self
+  {
+    $this->driver->addPage($config);
+
+    return $this;
+  }
 
   public function output(): string
   {
