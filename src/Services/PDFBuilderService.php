@@ -35,6 +35,15 @@ class PDFBuilderService
     return $this;
   }
 
+  public function eachPage(string $pathFile, callable $pageCallback, bool $force = true): self
+  {
+    $this->steps[] = function () use ($pathFile, $pageCallback, $force) {
+      $this->pdfClonerService->eachPageFromFile($pathFile, $pageCallback, $force);
+    };
+
+    return $this;
+  }
+
   /**
    * Adiciona um arquivo PDF no pipeline, com callback opcional por página.
    */

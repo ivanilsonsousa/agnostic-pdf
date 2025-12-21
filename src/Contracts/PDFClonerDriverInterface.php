@@ -14,4 +14,8 @@ interface PDFClonerDriverInterface
    * Deve clonar uma página específica.
    */
   public function clonePage(int $pageNo): void;
+  
+  public function importPageDefinitions(int $pageNo);
+  
+  public function renderPage(string $tplId);
 }

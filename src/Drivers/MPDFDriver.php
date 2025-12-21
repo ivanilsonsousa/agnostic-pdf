@@ -69,10 +69,16 @@ class MPDFDriver implements PDFServiceInterface, PDFClonerDriverInterface
 
   public function prepareClone(string $pathFile): int
   {
+    if (!file_exists($pathFile)) {
+      // throw new \Exception("Arquivo PDF para clonagem não encontrado: {$pathFile}");
+
+      return 0;
+    }
+
     return $this->mpdf->SetSourceFile($pathFile);
   }
 
-  public function clonePage(int $pageNo): void
+  public function importPageDefinitions(int $pageNo): string
   {
     $tplId       = $this->mpdf->importPage($pageNo);
     $size        = $this->mpdf->getTemplateSize($tplId);
@@ -83,7 +89,18 @@ class MPDFDriver implements PDFServiceInterface, PDFClonerDriverInterface
       'orientation' => $orientation,
       'newformat'   => $newformat,
     ]);
+
+    return $tplId;
+  }
+
+  public function renderPage(string $tplId) {
     $this->mpdf->useTemplate($tplId);
+  }
+
+  public function clonePage(int $pageNo): void
+  {
+    $tplId = $this->importPageDefinitions($pageNo);
+    $this->renderPage($tplId);
   }
 
   public function writeCss(string $css): self
