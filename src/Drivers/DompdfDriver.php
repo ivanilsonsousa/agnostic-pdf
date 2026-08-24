@@ -3,13 +3,14 @@
 namespace AgnosticPDF\Drivers;
 
 use AgnosticPDF\Contracts\PDFServiceInterface;
+use Dompdf\Dompdf;
 use Illuminate\Support\Facades\Response;
 use Illuminate\Support\Facades\View;
-use Dompdf\Dompdf;
 
 class DompdfDriver implements PDFServiceInterface
 {
   protected Dompdf $dompdf;
+  protected string $html = '';
 
   public function __construct(array $config = [])
   {
@@ -21,7 +22,8 @@ class DompdfDriver implements PDFServiceInterface
 
   public function loadHtml(string $html): self
   {
-    $this->dompdf->loadHtml($html);
+    $this->html .= $html;
+    $this->dompdf->loadHtml($this->html);
 
     return $this;
   }
@@ -79,5 +81,13 @@ class DompdfDriver implements PDFServiceInterface
   public function tap(callable $fn): void
   {
     $fn($this->getEngine());
+  }
+
+  public function addPage(array $config = []): self
+  {
+    $this->html .= '<div style="page-break-before: always;"></div>';
+    $this->dompdf->loadHtml($this->html);
+
+    return $this;
   }
 }

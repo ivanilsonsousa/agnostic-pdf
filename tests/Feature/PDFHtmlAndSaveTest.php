@@ -43,4 +43,22 @@ final class PDFHtmlAndSaveTest extends TestCase
     $this->assertFileExists($outPath);
     $this->assertGreaterThan(100, filesize($outPath));
   }
+
+  #[DataProvider('drivers')]
+  public function test_it_adds_a_page(string $driver): void
+  {
+    config()->set('pdf.driver', $driver);
+
+    /** @var PDFService $pdf */
+    $pdf = $this->app->make(PDFService::class);
+
+    $content = $pdf
+      ->loadHtml('<p>Primeira página</p>')
+      ->addPage()
+      ->loadHtml('<p>Segunda página</p>')
+      ->output();
+
+    $this->assertStringStartsWith('%PDF-', $content);
+    $this->assertGreaterThanOrEqual(2, preg_match_all('/\/Type\s*\/Page\b/', $content));
+  }
 }

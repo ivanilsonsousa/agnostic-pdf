@@ -241,12 +241,11 @@ $builder = PDF::builder();
 
 ## Requisitos
 
-- Laravel `^12.0` (auto-discovery de provider já configurado)
+- PHP `^8.2` (Laravel 13 requer PHP 8.3 ou superior)
+- Laravel `^12.0 || ^13.0` (auto-discovery de provider já configurado)
 - Drivers:
   - `mpdf/mpdf:^8.2`
   - `dompdf/dompdf:^3.1`
-
-- PHP: utilize a versão suportada pelo seu Laravel/driver.
 
 ---
 
