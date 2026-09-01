@@ -7,7 +7,17 @@ use AgnosticPDF\Contracts\PDFServiceInterface;
 class PDFBuilderService
 {
   protected PDFServiceInterface $pdfService;
-  protected PDFClonerService $pdfClonerService;
+
+  /**
+   * O serviço de clonagem, quando o driver ativo a suporta.
+   *
+   * É nulo com o Dompdf, que não clona páginas. Antes deste campo ser opcional,
+   * `PDFManagerService::builder()` montava um `PDFClonerService` com o driver
+   * qualquer que fosse: com o Dompdf ativo isso era um TypeError na construção
+   * do builder — ou seja, o builder inteiro era inutilizável nesse driver,
+   * mesmo para um pipeline que só renderizasse views.
+   */
+  protected ?PDFClonerService $pdfClonerService;
 
   /**
    * Stack de steps a serem executados.
@@ -17,7 +27,7 @@ class PDFBuilderService
    */
   protected array $steps = [];
 
-  public function __construct(PDFServiceInterface $pdfService, PDFClonerService $pdfClonerService)
+  public function __construct(PDFServiceInterface $pdfService, ?PDFClonerService $pdfClonerService = null)
   {
     $this->pdfService       = $pdfService;
     $this->pdfClonerService = $pdfClonerService;
@@ -47,7 +57,7 @@ class PDFBuilderService
   public function eachPage(string $pathFile, callable $pageCallback, bool $force = true): self
   {
     $this->steps[] = function () use ($pathFile, $pageCallback, $force) {
-      $this->pdfClonerService->eachPageFromFile($pathFile, $pageCallback, $force);
+      $this->cloner()->eachPageFromFile($pathFile, $pageCallback, $force);
     };
 
     return $this;
@@ -59,7 +69,7 @@ class PDFBuilderService
   public function addFile(string $pathFile, ?callable $pageCallback = null): self
   {
     $this->steps[] = function () use ($pathFile, $pageCallback) {
-      $this->pdfClonerService->cloneFromFile($pathFile, $pageCallback);
+      $this->cloner()->cloneFromFile($pathFile, $pageCallback);
     };
 
     return $this;
@@ -85,6 +95,7 @@ class PDFBuilderService
       $margins     = $this->normalizeMargins($options['margins'] ?? null);
 
       [$imgWpx, $imgHpx] = @getimagesize($pathImage);
+
       if (!$imgWpx || !$imgHpx) {
         throw new \RuntimeException("Não foi possível obter dimensões da imagem: {$pathImage}");
       }
@@ -124,19 +135,19 @@ class PDFBuilderService
         // 3) área útil
         if ($margins) {
           [$mt, $mr, $mb, $ml] = $margins;
-          $usableW = $pageWidth  - ($ml + $mr);
-          $usableH = $pageHeight - ($mt + $mb);
-          $originX = $ml;
-          $originY = $mt;
+          $usableW             = $pageWidth  - ($ml + $mr);
+          $usableH             = $pageHeight - ($mt + $mb);
+          $originX             = $ml;
+          $originY             = $mt;
         } else {
           $usableW = $pageWidth  * $fit;
           $usableH = $pageHeight * $fit;
-          $originX = ($pageWidth  - $usableW) / 2;
+          $originX = ($pageWidth - $usableW) / 2;
           $originY = ($pageHeight - $usableH) / 2;
         }
 
         // 4) escala proporcional
-        $ratioImg = $imgWpx / $imgHpx;
+        $ratioImg = $imgWpx  / $imgHpx;
         $ratioBox = $usableW / $usableH;
 
         if ($ratioImg >= $ratioBox) {
@@ -203,6 +214,25 @@ class PDFBuilderService
   }
 
   /**
+   * O serviço de clonagem, ou um erro que diz o que fazer.
+   *
+   * A falha acontece no processamento do pipeline, não no `addFile()`, porque é
+   * lá que a clonagem seria executada — e a mensagem nomeia o driver ativo, que
+   * é a informação que falta a quem chamou.
+   */
+  private function cloner(): PDFClonerService
+  {
+    if ($this->pdfClonerService === null) {
+      throw new \RuntimeException(sprintf(
+        'A clonagem de páginas exige um driver que a suporte (MPDF); o driver ativo é "%s". Ajuste `pdf.driver` em config/pdf.php.',
+        (string) config('pdf.driver', 'mpdf')
+      ));
+    }
+
+    return $this->pdfClonerService;
+  }
+
+  /**
    * Processa todas as steps do pipeline.
    */
   protected function processSteps(): void
@@ -217,18 +247,22 @@ class PDFBuilderService
 
   private function normalizeMargins(null|float|array $margins): ?array
   {
-    if ($margins === null) return null;
+    if ($margins === null) {
+      return null;
+    }
 
     if (is_array($margins)) {
       $m = array_values($margins);
-      $m[0] = $m[0] ?? 0;       // top
-      $m[1] = $m[1] ?? $m[0];   // right
-      $m[2] = $m[2] ?? $m[0];   // bottom
-      $m[3] = $m[3] ?? $m[1];   // left
-      return [(float)$m[0], (float)$m[1], (float)$m[2], (float)$m[3]];
+      $m[0] ??= 0;       // top
+      $m[1] ??= $m[0];   // right
+      $m[2] ??= $m[0];   // bottom
+      $m[3] ??= $m[1];   // left
+
+      return [(float) $m[0], (float) $m[1], (float) $m[2], (float) $m[3]];
     }
 
-    $v = (float)$margins;
+    $v = (float) $margins;
+
     return [$v, $v, $v, $v];
   }
 }

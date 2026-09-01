@@ -10,6 +10,7 @@ Manipulação de PDFs para projetos **Laravel**, com **drivers intercambiáveis*
 
 - [Instalação](#instalação)
 - [Configuração](#configuração)
+  - [Configuração por chamada](#configuração-por-chamada)
 - [Uso rápido](#uso-rápido)
 - [API do Serviço de PDF](#api-do-serviço-de-pdf)
 - [Clonagem de PDFs (MPDF)](#clonagem-de-pdfs-mpdf)
@@ -58,6 +59,42 @@ return [
 ```
 
 > **Nota:** A clonagem de PDFs é um recurso do **MPDF**.
+
+### Configuração por chamada
+
+`config/pdf.php` é a configuração **da instalação**. Só que formato, orientação e
+margem costumam ser de **cada documento**: um relatório A4 com margem, uma
+etiqueta de 90x29mm e um documento carimbado sem margem convivem na mesma
+aplicação.
+
+Para isso, `pdf()`, `builder()` e `cloner()` aceitam um array que é aplicado
+**por cima** das opções do driver ativo:
+
+```php
+use AgnosticPDF\Facades\PDF;
+
+// Um relatório A4 com margens próprias, sem tocar no config global:
+return PDF::pdf([
+        'format'       => 'A4',
+        'margin_left'  => 16,
+        'margin_right' => 16,
+        'margin_top'   => 26,
+    ])
+    ->loadView('pdf.report', ['data' => $data])
+    ->streamResponse('relatorio.pdf');
+
+// Uma etiqueta, na mesma aplicação e na mesma requisição:
+$etiqueta = PDF::pdf(['format' => [90, 29], 'margin_top' => 2])->loadView('pdf.label');
+```
+
+Só as chaves informadas mudam; as demais continuam vindo de `config/pdf.php`.
+Cada chamada devolve uma instância nova, então uma não interfere na outra.
+
+> **Por que não ajustar depois de construir?** Porque não funciona: o mPDF
+> calcula a área de escrita na construção. Um `SetMargins()` posterior não
+> reflui o conteúdo — a página continua com a largura útil antiga e o texto
+> sangra até a borda, sem erro nenhum. Daí a configuração precisar chegar no
+> momento em que o driver é criado.
 
 ---
 
@@ -189,7 +226,7 @@ Erros de compressão lançam `AgnosticPDF\Exceptions\PDFCompressException`, que 
 
 ## Facade e Manager
 
-A _facade_ `AgnosticPDF\Facades\PDF` resolve o **Manager** (`AgnosticPDF\Services\PDFManagerService`), que agrega:
+A _facade_ `AgnosticPDF\Facades\PDF` resolve o **Manager** (`AgnosticPDF\Services\PDFManagerService`), cujos três métodos — `pdf()`, `builder()` e `cloner()` — aceitam [configuração por chamada](#configuração-por-chamada). Ele agrega:
 
 - o serviço de PDF (renderização),
 - o serviço de clonagem (quando disponível),
@@ -200,16 +237,15 @@ O Manager oferece um **builder** para cenários em que você quer **encadear** o
 ```php
 use AgnosticPDF\Facades\PDF;
 
-$builder = PDF::builder();
-
-// Exemplo ilustrativo de pipeline (os métodos encadeáveis são do seu builder):
-// $builder
-//     ->cloneFromFile(storage_path('app/input.pdf'))
-//     ->loadView('pdf.cover', ['title' => 'Meu PDF'])
-//     ->streamResponse('final.pdf');
+PDF::builder()
+   ->addView('pdf.cover', ['title' => 'Meu PDF'])   // uma capa renderizada
+   ->addFile(storage_path('app/input.pdf'))         // e o PDF existente em seguida
+   ->save(storage_path('app/pdfs/final.pdf'));
 ```
 
-> O **builder** é útil principalmente para **clonagem com MPDF** seguida de emissão do PDF, assegurando que tudo ocorra no mesmo documento interno.
+Métodos do builder: `addView`, `addPage`, `addFile`, `addImage`, `eachPage` e, para emitir, `save`, `stream` e `output`.
+
+> O **builder** é útil principalmente para **clonagem com MPDF** seguida de emissão do PDF, assegurando que tudo ocorra no mesmo documento interno. Com o Dompdf ele funciona para pipelines que não clonam; `addFile`/`eachPage` lançam `RuntimeException` explicando que a clonagem exige MPDF.
 
 ---
 
@@ -218,7 +254,7 @@ $builder = PDF::builder();
 ### Contratos
 
 - `AgnosticPDF\Contracts\PDFServiceInterface`
-  Operações de renderização/saída: `loadHtml`, `loadView`, `output`, `download`, `save`, `stream`, `streamResponse`.
+  Operações de renderização/saída: `loadHtml`, `loadView`, `output`, `download`, `save`, `stream`, `streamResponse`, `addPage`, `getEngine` e `tap`.
 
 - `AgnosticPDF\Contracts\PDFClonerDriverInterface` (**MPDF**)
   Clonagem de páginas:
@@ -229,7 +265,7 @@ $builder = PDF::builder();
 
 - `AgnosticPDF\Drivers\MPDFDriver`
   Implementa `PDFServiceInterface` **e** `PDFClonerDriverInterface`.
-  Fornece `getMpdf(): \Mpdf\Mpdf` para configurações avançadas do mPDF.
+  Fornece `getEngine(): \Mpdf\Mpdf` para configurações avançadas do mPDF — ou `tap(callable)`, que entrega a mesma instância a um callback.
 
 - `AgnosticPDF\Drivers\DompdfDriver`
   Implementa `PDFServiceInterface`.
@@ -251,7 +287,7 @@ $builder = PDF::builder();
 
 ### Namespace & Provider
 
-As classes públicas estão sob `AgnosticPDF\...` e o _Service Provider_ é `AgnosticPDF\PDFServiceProvider` (auto-discovery via `composer.json`).
+As classes públicas estão sob `AgnosticPDF\...` e o _Service Provider_ é `AgnosticPDF\AgnosticPDFServiceProvider` (auto-discovery via `composer.json`).
 
 ---
 
@@ -291,7 +327,7 @@ $compressed = app(PDFCompressor::class)->reduce(storage_path('app/pdfs/relatorio
 use AgnosticPDF\Facades\PDF;
 
 PDF::builder()
-   ->cloneFromFile(storage_path('app/pdfs/base.pdf'))
-   ->loadView('pdf.appendix', ['data' => $data])
-   ->streamResponse('final.pdf');
+   ->addFile(storage_path('app/pdfs/base.pdf'))
+   ->addView('pdf.appendix', ['data' => $data])
+   ->save(storage_path('app/pdfs/final.pdf'));
 ```
