@@ -45,6 +45,27 @@ class PDFBuilderService
     return $this;
   }
   
+  /**
+   * Executa um callback sobre o engine do driver, **na ordem do pipeline**.
+   *
+   * É o `tap()` do PDFService trazido para o builder, e existe pela mesma
+   * razão: há operações que só o driver concreto sabe fazer — importar um
+   * template do FPDI, registrar CSS de cabeçalho, mexer em cabeçalho e rodapé
+   * de página. Sem isto, um pipeline que precisasse disso antes de clonar não
+   * tinha como se expressar, e quem o escrevia acabava construindo o driver na
+   * mão e abrindo mão do builder inteiro.
+   *
+   * @param callable $fn function(mixed $engine): void
+   */
+  public function tap(callable $fn): self
+  {
+    $this->steps[] = function () use ($fn) {
+      $this->pdfService->tap($fn);
+    };
+
+    return $this;
+  }
+
   public function addPage(array $config = []): self
   {
     $this->steps[] = function () use ($config) {
@@ -142,7 +163,7 @@ class PDFBuilderService
         } else {
           $usableW = $pageWidth  * $fit;
           $usableH = $pageHeight * $fit;
-          $originX = ($pageWidth - $usableW) / 2;
+          $originX = ($pageWidth - $usableW)  / 2;
           $originY = ($pageHeight - $usableH) / 2;
         }
 
