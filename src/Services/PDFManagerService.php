@@ -6,6 +6,7 @@ namespace AgnosticPDF\Services;
 
 use AgnosticPDF\Contracts\PDFClonerDriverInterface;
 use AgnosticPDF\Contracts\PDFServiceInterface;
+use AgnosticPDF\Contracts\PdfSignerInterface;
 use AgnosticPDF\Drivers\DompdfDriver;
 use AgnosticPDF\Drivers\MPDFDriver;
 use Illuminate\Contracts\Container\Container;
@@ -70,6 +71,14 @@ class PDFManagerService
       : null;
 
     return new PDFBuilderService(new PDFService($driver), $cloner);
+  }
+
+  /**
+   * The incremental signer is intentionally independent from the renderer.
+   */
+  public function signer(): PdfSignerInterface
+  {
+    return $this->container->make(PdfSignerInterface::class);
   }
 
   /**

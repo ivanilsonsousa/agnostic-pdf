@@ -15,6 +15,17 @@ return [
 
   /*
     |--------------------------------------------------------------------------
+    | Digital signature driver
+    |--------------------------------------------------------------------------
+    |
+    | Kept separate from the rendering driver: signing an existing document
+    | requires an incremental writer and must never pass through mPDF/FPDI.
+    |
+    */
+  'signer' => env('PDF_SIGNER_DRIVER', 'papier'),
+
+  /*
+    |--------------------------------------------------------------------------
     | MPDF Configuration
     |--------------------------------------------------------------------------
     */

@@ -1,6 +1,8 @@
-# Agnostic PDF (Laravel)
+# Agnostic PDF
 
-Manipulação de PDFs para projetos **Laravel**, com **drivers intercambiáveis** (mPDF e Dompdf). Fornece uma API simples para renderizar de _views_ ou HTML, _streamar_, baixar, salvar e — quando suportado pelo driver — **clonar páginas de PDFs existentes**. Inclui ainda um serviço de **compressão** de PDFs.
+Manipulação de PDFs com **drivers intercambiáveis** (mPDF e Dompdf), assinatura
+digital incremental e integração opcional com Laravel. Fornece uma API para
+renderizar, clonar, comprimir, assinar e verificar PDFs.
 
 > Foco: DX simples no Laravel, mantendo o código da aplicação desacoplado do driver.
 
@@ -12,6 +14,7 @@ Manipulação de PDFs para projetos **Laravel**, com **drivers intercambiáveis*
 - [Configuração](#configuração)
   - [Configuração por chamada](#configuração-por-chamada)
 - [Uso rápido](#uso-rápido)
+- [Assinatura digital](#assinatura-digital)
 - [API do Serviço de PDF](#api-do-serviço-de-pdf)
 - [Clonagem de PDFs (MPDF)](#clonagem-de-pdfs-mpdf)
 - [Compressão de PDFs](#compressão-de-pdfs)
@@ -145,6 +148,110 @@ public function download(PDFService $pdf)
 
 ---
 
+## Assinatura digital
+
+O assinador é independente do mPDF e do Dompdf. Ele acrescenta uma assinatura
+CMS/PKCS#7 destacada (`adbe.pkcs7.detached`) em uma **revisão incremental**: os
+bytes que já existiam permanecem intactos. Assim, uma segunda assinatura não
+reescreve nem invalida a primeira.
+
+Consulte [docs/signatures.md](docs/signatures.md) para a API completa, modelo de
+confiança, segurança, múltiplas assinaturas e limitações.
+
+```php
+use AgnosticPDF\Drivers\PapierPdfSigner;
+use AgnosticPDF\Signatures\Certificate;
+use AgnosticPDF\Signatures\SignatureAppearance;
+use AgnosticPDF\Signatures\SignatureOptions;
+
+$certificate = Certificate::fromPkcs12File(
+    '/run/secrets/signing-certificate.p12',
+    $_ENV['PDF_CERTIFICATE_PASSWORD'],
+);
+
+$appearance = SignatureAppearance::make()
+    ->page(1)
+    ->position(36, 24) // pontos, origem inferior esquerda
+    ->size(280, 71)
+    ->pdf('/path/to/vector-seal.pdf');
+
+$signed = (new PapierPdfSigner())->sign(
+    file_get_contents('/path/to/input.pdf'),
+    $certificate,
+    $appearance,
+    SignatureOptions::make()
+        ->signer('Maria da Silva')
+        ->reason('Aprovação do documento'),
+);
+
+file_put_contents('/path/to/signed.pdf', $signed);
+```
+
+`pdf()` usa a primeira página de um PDF como aparência vetorial, preservando o
+texto. `image()` aceita bytes ou caminho local para PNG/JPEG. Sem aparência, a
+assinatura é invisível. Também é possível usar
+`SignatureAppearance::default(...)` para uma caixa de texto simples.
+
+### Certificado autoassinado
+
+A biblioteca pode gerar um certificado RSA autoassinado para instalações que
+controlam sua própria âncora de confiança:
+
+```php
+$certificate = Certificate::create()
+    ->commonName('Sistema de Documentos')
+    ->organization('Minha Organização')
+    ->organizationalUnit('Assinatura de documentos')
+    ->country('BR')
+    ->validFor(1825)
+    ->generate();
+
+$p12 = $certificate->exportPkcs12($_ENV['PDF_CERTIFICATE_PASSWORD']);
+```
+
+A aplicação, não a biblioteca, deve persistir e proteger a chave privada. Um
+certificado autoassinado prova a integridade criptográfica, mas aparece como
+**não confiável** até que seu certificado público seja instalado ou fornecido
+como âncora de confiança. Ele não equivale por si só a um certificado emitido
+por uma autoridade certificadora ou a uma assinatura qualificada.
+
+### Verificação
+
+```php
+use AgnosticPDF\Signatures\TrustStore;
+
+$trust = TrustStore::fromFile('/path/to/trusted-certificates.pem');
+$result = (new PapierPdfSigner())->verify($signed, $trust);
+
+foreach ($result->signatures as $signature) {
+    $signature->signerName;
+    $signature->cryptographicallyValid;
+    $signature->certificateTrusted;
+    $signature->certificateValidAtSigningTime;
+    $signature->algorithm;
+    $signature->hasLaterChanges;
+    $signature->certificate?->subjectName();
+}
+```
+
+Sem `TrustStore`, a integridade continua sendo verificada e
+`certificateTrusted` fica `null`. PDFs sem assinatura retornam um resultado
+vazio. PDFs corrompidos e documentos certificados com DocMDP `P=1` são
+rejeitados com `PdfSignatureException`.
+
+No Laravel, injete `AgnosticPDF\Contracts\PdfSignerInterface` ou use
+`PDF::signer()`. Fora dele, instancie `PapierPdfSigner` diretamente.
+
+### Limites atuais
+
+- assinatura CMS de aprovação compatível com ISO 32000, sem carimbo de tempo
+  TSA, OCSP/CRL ou perfil PAdES-LT/LTA;
+- suporte a restrição DocMDP `P=1`; políticas FieldMDP não são interpretadas;
+- a verificação informa alterações posteriores, mas não classifica cada revisão
+  posterior como permitida ou maliciosa.
+
+---
+
 ## API do Serviço de PDF
 
 A interface comum aos drivers é `AgnosticPDF\Contracts\PDFServiceInterface`. Os métodos expostos pelo **serviço principal** (`AgnosticPDF\Services\PDFService`) espelham essa interface:
@@ -261,6 +368,10 @@ Métodos do builder: `addView`, `addPage`, `addFile`, `addImage`, `eachPage` e, 
   - `prepareClone(string $pathFile): int` → retorna o número de páginas do PDF origem;
   - `clonePage(int $pageNo): void` → importa a página para o documento atual.
 
+- `AgnosticPDF\Contracts\PdfSignerInterface`
+  Assinatura incremental e verificação de assinaturas existentes, sem depender
+  do driver de renderização ou do Laravel.
+
 ### Drivers disponíveis
 
 - `AgnosticPDF\Drivers\MPDFDriver`
@@ -278,10 +389,12 @@ Métodos do builder: `addView`, `addPage`, `addFile`, `addImage`, `eachPage` e, 
 ## Requisitos
 
 - PHP `^8.2` (Laravel 13 requer PHP 8.3 ou superior)
-- Laravel `^12.0 || ^13.0` (auto-discovery de provider já configurado)
+- extensões `openssl`, `mbstring` e `zlib`
+- Laravel `^12.0 || ^13.0` somente para provider, facade, views e respostas HTTP
 - Drivers:
   - `mpdf/mpdf:^8.2`
   - `dompdf/dompdf:^3.1`
+  - `papier/papier:^3.0`
 
 ---
 

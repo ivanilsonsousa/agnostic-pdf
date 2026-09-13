@@ -6,14 +6,16 @@ namespace AgnosticPDF;
 
 use AgnosticPDF\Contracts\PDFClonerDriverInterface;
 use AgnosticPDF\Contracts\PDFServiceInterface;
-use Illuminate\Contracts\Container\Container;
-use AgnosticPDF\Services\PDFManagerService;
+use AgnosticPDF\Contracts\PdfSignerInterface;
+use AgnosticPDF\Drivers\DompdfDriver;
+use AgnosticPDF\Drivers\MPDFDriver;
+use AgnosticPDF\Drivers\PapierPdfSigner;
 use AgnosticPDF\Services\PDFClonerService;
 use AgnosticPDF\Services\PDFCompressor;
-use Illuminate\Support\ServiceProvider;
-use AgnosticPDF\Drivers\DompdfDriver;
+use AgnosticPDF\Services\PDFManagerService;
 use AgnosticPDF\Services\PDFService;
-use AgnosticPDF\Drivers\MPDFDriver;
+use Illuminate\Contracts\Container\Container;
+use Illuminate\Support\ServiceProvider;
 
 final class AgnosticPDFServiceProvider extends ServiceProvider
 {
@@ -38,6 +40,11 @@ final class AgnosticPDFServiceProvider extends ServiceProvider
     // Cloner: sempre MPDF (único que suporta)
     $this->app->bind(PDFClonerDriverInterface::class, function () {
       return new MPDFDriver(config('pdf.mpdf', []));
+    });
+
+    $this->app->bind(PdfSignerInterface::class, fn (): PdfSignerInterface => match (config('pdf.signer', 'papier')) {
+      'papier' => new PapierPdfSigner(),
+      default  => throw new \InvalidArgumentException('Unsupported PDF signature driver.'),
     });
 
     $this->app->bind(PDFClonerService::class, function (Container $app) {
